@@ -1,0 +1,1 @@
+Vacancy parser rabota.ua & work.ua
