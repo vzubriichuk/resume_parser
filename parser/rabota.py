@@ -8,6 +8,7 @@ Time    : 14.12.2021 9:44
 import os
 import threading
 import json
+import time
 import pandas as pd
 import config
 
@@ -54,7 +55,7 @@ class Rabota(threading.Thread):
             logger.critical(error, exc_info=True)
 
     def authorisation(self, login, password):
-        logger.info(f'Авторизация')
+        logger.info(f'{time_format()} Авторизация')
         url = 'https://rabota.ua/employer/login'
         self.driver.get(url)
         self.driver.set_page_load_timeout(45)
@@ -108,20 +109,20 @@ class Parser(Rabota):
         self.salary = str
         self.age = str
         self.cv_note = ''
+        self.download_path = download_path
 
     def parsing_query(self, query_search=str, query_number=int):
         """
         Парсит список резюме по запросу
         query_search: строка запроса
-        count_queries: количество запросов всего
         query_number: порядковый номер запроса
         """
-        logger.info(f'Отправка запроса # {query_number} и получение списка резюме')
-
+        logger.info(f'{time_format()} Отправка запроса # {query_number} и получение списка резюме')
         self.driver.get(query_search)
+        time.sleep(5)
         temp_uid_list = []
         page = 1
-        while True and len(temp_uid_list) <= 10:
+        while True and len(temp_uid_list) <= 20:
             self.driver.refresh()
             try:
                 if self.driver.execute_script('return document.readyState;') == 'complete':
@@ -140,7 +141,6 @@ class Parser(Rabota):
                         #     pass
                         a = element.find_element(By.TAG_NAME, 'a')
                         info = [i.text for i in a.find_elements(By.TAG_NAME, 'p')][:-2]
-                        print(info)
                         self.cv_url_list.append(a.get_attribute('href'))
                         self.href = (a.get_attribute('href'))
                         self.uid = self.href.replace('https://rabota.ua/candidates/', "")
@@ -164,7 +164,7 @@ class Parser(Rabota):
                         try:
                             self.salary = info[4]
                         except IndexError:
-                            self.age = 'Не указан'
+                            self.salary = 'Не указан'
                         self.candidates[f'{int(self.uid)}'] = {
                             "url": self.href,
                             "name": self.name,
@@ -194,13 +194,19 @@ class Parser(Rabota):
         """
         Проходит по списку uid и url адресов вакансий, передает их по очереди
         в функцию parsing_cv откуда дополнительно парсится телефон
-        :return: в конце запускает сохранение словаря с данными
+        в конце запускает сохранение словаря с данными
         """
         count_cv = len(self.uid_list)
-        logger.info(f'Проход по списку собранных резюме: {count_cv} шт.')
+        logger.info(f'{time_format()} Проход по списку собранных резюме: {count_cv} шт.')
+        cv = 1
         for uid in self.uid_list:
+            time.sleep(3)
+            print('#',cv, self.candidates[f'{uid}']['url'])
             url = self.candidates[f'{uid}']['url']
             self.parsing_cv(uid, url)
+            cv += 1
+        json_obj = json.dumps(self.candidates, indent=4, ensure_ascii=False)
+        # print(json_obj)
         self.save_data_to_excel()
         self.driver.quit()
 
@@ -219,27 +225,30 @@ class Parser(Rabota):
                 try:
                     open_button = '//santa-button-spinner/div/santa-button/button'
                     self.driver.find_element(By.XPATH, open_button).click()
+                    time.sleep(2)
                     continue
                 except NoSuchElementException:
                     pass
                 try:
-                    phone_element = '//alliance-employer-ui-resume-contacts/div/p[1]/alliance-shared-ui-copy-to-clipboard/p/a'
+                    time.sleep(2)
+                    phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
                     phone = element.find_element(By.XPATH, phone_element)
                     self.phone = phone.text
+                    # print(self.phone)
                     continue
                 except NoSuchElementException:
                     pass
-                self.candidates[f'{uid}']["phone"] = self.phone
+            self.candidates[f'{uid}']['phone'] = self.phone
 
 
     def save_data_to_excel(self):
         """
         Обрабатывает словарь спарсенных данных и сохраняет в Excel
         """
-        logger.info('Сохранение результатов в файл.')
+        logger.info('{time_format()} Сохранение результатов в файл.')
         # вместо зарплаты может спарситься левый текст, проверяем
-        for i in self.uid_list:
-            uid = i
+
+        for uid in self.uid_list:
             if self.candidates[f'{uid}']['salary'][0].isdigit():
                 pass
             else:
@@ -263,7 +272,7 @@ def get_query_list():
 if __name__ == '__main__':
     login = config.LOGIN
     password = config.PASSWORD
-    headless = False
+    headless = True
     parser = Parser(headless)
     parser.authorisation(login, password)
     get_query_list()
@@ -276,7 +285,7 @@ if __name__ == '__main__':
         parser.parsing_query(query, query_num)
         query_num += 1
 
-    # parser.run_parsing_cv()
+    parser.run_parsing_cv()
 
 
 
