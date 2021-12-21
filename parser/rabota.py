@@ -18,7 +18,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException, StaleElementReferenceException, TimeoutException
 from datetime import datetime
-from icecream import ic
+# from icecream import ic
 
 from logger import logger
 
@@ -43,6 +43,7 @@ class Rabota(threading.Thread):
         service = Service(os.getcwd() + '\\chromedriver.exe')
         self.chrome_options.add_argument('--disable-download-notification')
         self.chrome_options.add_argument('--disable-gpu')
+        self.chrome_options.add_argument("--log-level=3")
         self.chrome_options.add_argument('user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36')
         self.chrome_options.add_experimental_option('prefs', prefs)
         self.chrome_options.headless = headless
@@ -55,7 +56,7 @@ class Rabota(threading.Thread):
             logger.critical(error, exc_info=True)
 
     def authorisation(self, login, password):
-        logger.info(f'{time_format()} Авторизация')
+        logger.info(f'{time_format()} Авторизация Rabota.ua')
         url = 'https://rabota.ua/employer/login'
         self.driver.get(url)
         self.driver.set_page_load_timeout(45)
@@ -71,7 +72,7 @@ class Rabota(threading.Thread):
 
             password_xpath = '//*[@id="ctl00_content_ZoneLogin_txPassword"]'
             self.driver.find_element(By.XPATH, password_xpath).send_keys(password)
-
+            time.sleep(3)
             entrance = '//*[@id="ctl00_content_ZoneLogin_btnLogin"]'
             self.driver.find_element(By.XPATH, entrance).click()
             try:
@@ -111,18 +112,19 @@ class Parser(Rabota):
         self.cv_note = ''
         self.download_path = download_path
 
-    def parsing_query(self, query_search=str, query_number=int):
+    def parsing_query(self, query_search=str, query_number=int, max_resume=int, key=str):
         """
         Парсит список резюме по запросу
         query_search: строка запроса
         query_number: порядковый номер запроса
         """
         logger.info(f'{time_format()} Отправка запроса # {query_number} и получение списка резюме')
+        time.sleep(5)
         self.driver.get(query_search)
         time.sleep(5)
         temp_uid_list = []
         page = 1
-        while True and len(temp_uid_list) <= 20:
+        while True and len(temp_uid_list) <= max_resume:
             self.driver.refresh()
             try:
                 if self.driver.execute_script('return document.readyState;') == 'complete':
@@ -172,7 +174,8 @@ class Parser(Rabota):
                             "city": self.city,
                             "age": self.age,
                             "salary": self.salary,
-                            "phone": ''
+                            "phone": '',
+                            "key": key
                         }
                     try:
                         if page == 1:
@@ -192,7 +195,7 @@ class Parser(Rabota):
 
     def run_parsing_cv(self):
         """
-        Проходит по списку uid и url адресов вакансий, передает их по очереди
+        Проходит по списку uid и url адресов резюме, передает их по очереди
         в функцию parsing_cv откуда дополнительно парсится телефон
         в конце запускает сохранение словаря с данными
         """
@@ -200,14 +203,15 @@ class Parser(Rabota):
         logger.info(f'{time_format()} Проход по списку собранных резюме: {count_cv} шт.')
         cv = 1
         for uid in self.uid_list:
-            time.sleep(3)
-            print('#',cv, self.candidates[f'{uid}']['url'])
+            time.sleep(5)
             url = self.candidates[f'{uid}']['url']
-            self.parsing_cv(uid, url)
+            phone = self.parsing_cv(uid, url)
+            print('    #', cv, self.candidates[f'{uid}']['url'], phone)
             cv += 1
         json_obj = json.dumps(self.candidates, indent=4, ensure_ascii=False)
         # print(json_obj)
         self.save_data_to_excel()
+        time.sleep(10)
         self.driver.quit()
 
 
@@ -230,24 +234,24 @@ class Parser(Rabota):
                 except NoSuchElementException:
                     pass
                 try:
-                    time.sleep(2)
+                    # time.sleep(2)
                     phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
                     phone = element.find_element(By.XPATH, phone_element)
                     self.phone = phone.text
-                    # print(self.phone)
                     continue
                 except NoSuchElementException:
                     pass
             self.candidates[f'{uid}']['phone'] = self.phone
+            return self.phone
 
 
     def save_data_to_excel(self):
         """
         Обрабатывает словарь спарсенных данных и сохраняет в Excel
         """
-        logger.info('{time_format()} Сохранение результатов в файл.')
+        time.sleep(5)
+        logger.info(f'{time_format()} Сохранение результатов в файл.')
         # вместо зарплаты может спарситься левый текст, проверяем
-
         for uid in self.uid_list:
             if self.candidates[f'{uid}']['salary'][0].isdigit():
                 pass
@@ -255,10 +259,13 @@ class Parser(Rabota):
                 self.candidates[f'{uid}']['salary'] = 'Не указана'
         df = pd.DataFrame.from_dict(self.candidates, orient='index')
         df.to_excel('cv_rabota_response.xlsx')
+
+        logger.info(f'{time_format()} Данные сохранены.')
         # json_obj = json.dumps(self.candidates, indent=4, ensure_ascii=False)
 
 
 query_list = []
+query_list_key = []
 
 def get_query_list():
     with open('search_query_list.txt', 'r', encoding='utf-8') as f:
@@ -267,23 +274,27 @@ def get_query_list():
             position = currentline[0].strip()
             city = currentline[1].strip()
             query_list.append(f'https://rabota.ua/candidates/{position}/{city}')
+            query_list_key.append(position + "_" + city)
 
 
 if __name__ == '__main__':
+    max_cv = int(input("Укажите максимальное кол-во резюме на запрос: "))
     login = config.LOGIN
     password = config.PASSWORD
-    headless = True
+    headless = False
     parser = Parser(headless)
     parser.authorisation(login, password)
     get_query_list()
 
     query_num = 1
+    query_id = 0
     for query in query_list:
         count_query = len(query_list)
-        ic(query_num)
-        ic(query)
-        parser.parsing_query(query, query_num)
+        query_list_key[query_id]
+        # ic(query)
+        parser.parsing_query(query, query_num, max_cv, query_list_key)
         query_num += 1
+        query_id += 1
 
     parser.run_parsing_cv()
 
