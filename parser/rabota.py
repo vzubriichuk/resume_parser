@@ -26,7 +26,8 @@ from logger import logger
 logger = logger('Rabota')
 
 def time_format():
-    return f'{datetime.now()}|> '
+    now = datetime.now()
+    return "%0.2d:%0.2d:%0.2d" % (now.hour, now.minute, now.second) + ' >'
 
 """
 Инициализация класса + функция авторизации
@@ -51,9 +52,13 @@ class Rabota(threading.Thread):
             self.driver = webdriver.Chrome(options=self.chrome_options,
                                            service=service)
         except Exception as error:
-            chromedriver_downoad = 'https://chromedriver.chromium.org/downloads'
-            logger.info(f'Необходимо обновить Chromedriver, загрузив подходящую версию по адресу {chromedriver_downoad}')
+            chromedriver_download = 'https://chromedriver.chromium.org/downloads'
+            logger.info(f'Внимание, ошибка!'
+                        f'Необходимо обновить Chromedriver, загрузив подходящую '
+                        f'версию по адресу {chromedriver_download}')
+            time.sleep(10)
             logger.critical(error, exc_info=True)
+
 
     def authorisation(self, login, password):
         logger.info(f'{time_format()} Авторизация Rabota.ua')
@@ -82,12 +87,6 @@ class Rabota(threading.Thread):
                 logger.exception(error)
                 return False
 
-    def end(self):
-        self.driver.quit()
-
-    def test(self):
-        self.driver.execute_script("window.open('');")
-        self.driver.switch_to.window(self.driver.window_handles[-1])
 
 
 """
@@ -117,6 +116,8 @@ class Parser(Rabota):
         Парсит список резюме по запросу
         query_search: строка запроса
         query_number: порядковый номер запроса
+        max_resume: ограничение max кол-ва резюме не запрос
+        key: ключ поиска
         """
         logger.info(f'{time_format()} Отправка запроса # {query_number} и получение списка резюме')
         time.sleep(5)
@@ -206,7 +207,7 @@ class Parser(Rabota):
             time.sleep(5)
             url = self.candidates[f'{uid}']['url']
             phone = self.parsing_cv(uid, url)
-            print('    #', cv, self.candidates[f'{uid}']['url'], phone)
+            print(f'{time_format()} #', cv, self.candidates[f'{uid}']['url'], phone)
             cv += 1
         json_obj = json.dumps(self.candidates, indent=4, ensure_ascii=False)
         # print(json_obj)
@@ -221,6 +222,7 @@ class Parser(Rabota):
         и добавляет его в словарь
         """
         self.driver.get(url)
+        self.phone = ''
         if self.driver.execute_script('return document.readyState;') == 'complete':
             card = '//alliance-employer-cvdb-resume'
             WebDriverWait(self.driver, 40).until(lambda d: self.driver.find_element(By.XPATH, card))
@@ -234,7 +236,7 @@ class Parser(Rabota):
                 except NoSuchElementException:
                     pass
                 try:
-                    # time.sleep(2)
+                    time.sleep(2)
                     phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
                     phone = element.find_element(By.XPATH, phone_element)
                     self.phone = phone.text
