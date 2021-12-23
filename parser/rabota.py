@@ -11,6 +11,7 @@ import json
 import time
 import pandas as pd
 import config
+import about
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -53,10 +54,15 @@ class Rabota(threading.Thread):
                                            service=service)
         except Exception as error:
             chromedriver_download = 'https://chromedriver.chromium.org/downloads'
-            logger.info(f'Внимание, ошибка!'
-                        f'Необходимо обновить Chromedriver, загрузив подходящую '
-                        f'версию по адресу {chromedriver_download}')
-            time.sleep(10)
+            logger.info(f'\nВнимание, ошибка!\n'
+                        f'Отсутствует Chromedriver или он не соответствует версии '
+                        f'вашего браузера Google Chrome.\n'
+                        f'Загрузите подходящую версию Chromedriver по адресу '
+                        f'{chromedriver_download}\n'
+                        f'Загруженный файл сохранить в каталоге этого парсера.\n'
+                        f'\n'
+                        f'Окно закроется через 30 секунд.')
+            time.sleep(30)
             logger.critical(error, exc_info=True)
 
 
@@ -131,17 +137,18 @@ class Parser(Rabota):
                 if self.driver.execute_script('return document.readyState;') == 'complete':
                     # print(f'\n{page}\n')
                     cards = '//alliance-employer-cvdb-cv-list-card'
-                    WebDriverWait(self.driver, 40).until(lambda d: self.driver.find_element(By.XPATH, cards))
+                    WebDriverWait(self.driver, 40).until(lambda d:
+                                                         self.driver.find_element(By.XPATH, cards))
                     elements = self.driver.find_elements(By.XPATH, cards)
                     for element in elements:
-                        # if element.is_displayed():
-                        #     var = element.location_once_scrolled_into_view
-                        # try:
-                        #     # если находим уже просмотренное резюме, то пропускаем
-                        #     element.find_element(By.CLASS_NAME, 'santa-opacity-50')
-                        #     continue
-                        # except NoSuchElementException:
-                        #     pass
+                        if element.is_displayed():
+                            var = element.location_once_scrolled_into_view
+                        try:
+                            # если находим уже просмотренное резюме, то пропускаем
+                            element.find_element(By.CLASS_NAME, 'santa-opacity-50')
+                            continue
+                        except NoSuchElementException:
+                            pass
                         a = element.find_element(By.TAG_NAME, 'a')
                         info = [i.text for i in a.find_elements(By.TAG_NAME, 'p')][:-2]
                         self.cv_url_list.append(a.get_attribute('href'))
@@ -204,7 +211,7 @@ class Parser(Rabota):
         logger.info(f'{time_format()} Проход по списку собранных резюме: {count_cv} шт.')
         cv = 1
         for uid in self.uid_list:
-            time.sleep(5)
+            time.sleep(2)
             url = self.candidates[f'{uid}']['url']
             phone = self.parsing_cv(uid, url)
             print(f'{time_format()} #', cv, self.candidates[f'{uid}']['url'], phone)
@@ -229,20 +236,25 @@ class Parser(Rabota):
             elements = self.driver.find_elements(By.XPATH, card)
             for element in elements:
                 try:
+                    time.sleep(3)
                     open_button = '//santa-button-spinner/div/santa-button/button'
                     self.driver.find_element(By.XPATH, open_button).click()
-                    time.sleep(2)
-                    continue
-                except NoSuchElementException:
-                    pass
-                try:
-                    time.sleep(2)
                     phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
+                    WebDriverWait(self.driver, 10).until(
+                        lambda d: self.driver.find_element(By.XPATH,
+                                                           phone_element))
                     phone = element.find_element(By.XPATH, phone_element)
                     self.phone = phone.text
                     continue
                 except NoSuchElementException:
-                    pass
+                    try:
+                        time.sleep(3)
+                        phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
+                        phone = element.find_element(By.XPATH, phone_element)
+                        self.phone = phone.text
+                        continue
+                    except NoSuchElementException:
+                        pass
             self.candidates[f'{uid}']['phone'] = self.phone
             return self.phone
 
@@ -270,7 +282,7 @@ query_list = []
 query_list_key = []
 
 def get_query_list():
-    with open('search_query_list.txt', 'r', encoding='utf-8') as f:
+    with open('search.txt', 'r', encoding='utf-8') as f:
         for line in f:
             currentline = line.split(",")
             position = currentline[0].strip()
@@ -280,10 +292,11 @@ def get_query_list():
 
 
 if __name__ == '__main__':
+    about.about()
     max_cv = int(input("Укажите максимальное кол-во резюме на запрос: "))
     login = config.LOGIN
     password = config.PASSWORD
-    headless = False
+    headless = True
     parser = Parser(headless)
     parser.authorisation(login, password)
     get_query_list()
@@ -292,9 +305,8 @@ if __name__ == '__main__':
     query_id = 0
     for query in query_list:
         count_query = len(query_list)
-        query_list_key[query_id]
-        # ic(query)
-        parser.parsing_query(query, query_num, max_cv, query_list_key)
+        key = query_list_key[query_id]
+        parser.parsing_query(query, query_num, max_cv, key)
         query_num += 1
         query_id += 1
 
