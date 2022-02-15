@@ -5,7 +5,7 @@ Author : Vitaliy Zubriichuk
 Contact : v@zubr.kiev.ua
 Time    : 23.12.2021 9:38
 """
-version_info = (0, 4)
+version_info = (0, 8)
 __title__ = 'Парсер резюме Rabota.ua | Логистика Fozzy Group'
 __description__ = 'Офис прогнозирования\nДепартамент мастер данных и отчетности'
 __version__ = '.'.join(map(str, version_info))

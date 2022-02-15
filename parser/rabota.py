@@ -126,9 +126,9 @@ class Parser(Rabota):
         key: ключ поиска
         """
         logger.info(f'{time_format()} Отправка запроса # {query_number} и получение списка резюме')
-        time.sleep(5)
+        time.sleep(2)
         self.driver.get(query_search)
-        time.sleep(5)
+        time.sleep(2)
         temp_uid_list = []
         page = 1
         while True and len(temp_uid_list) <= max_resume:
@@ -238,9 +238,11 @@ class Parser(Rabota):
                 try:
                     time.sleep(3)
                     open_button = '//santa-button-spinner/div/santa-button/button'
+                    WebDriverWait(self.driver, 20).until(
+                        lambda d: self.driver.find_element(By.XPATH, open_button))
                     self.driver.find_element(By.XPATH, open_button).click()
                     phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
-                    WebDriverWait(self.driver, 10).until(
+                    WebDriverWait(self.driver, 30).until(
                         lambda d: self.driver.find_element(By.XPATH,
                                                            phone_element))
                     phone = element.find_element(By.XPATH, phone_element)
@@ -287,8 +289,29 @@ def get_query_list():
             currentline = line.split(",")
             position = currentline[0].strip()
             city = currentline[1].strip()
-            query_list.append(f'https://rabota.ua/candidates/{position}/{city}')
+            gender_parce = int(currentline[2].strip())
+            gender = get_gender(gender_parce)
+            age_from = currentline[3].strip()
+            age_to = currentline[4].strip()
+
+            if gender == 0 and age_from == 0 and age_to == 0:
+                query_list.append(f'https://rabota.ua/candidates/{position}/{city}')
+            elif gender != 0 and age_from == 0 and age_to == 0:
+                query_list.append(f'https://rabota.ua/candidates/{position}/{city}?gender={gender}')
+            elif gender != 0 and age_from != 0 and age_to != 0:
+                query_list.append(f'https://rabota.ua/candidates/{position}/{city}?gender="{gender}"&age=%7B"from"%3A{age_from}%2C"to"%3A{age_to}%7D')
+            elif gender == 0 and age_from != 0 and age_to != 0:
+                query_list.append(f'https://rabota.ua/candidates/{position}/{city}?age=%7B"from"%3A{age_from}%2C"to"%3A{age_to}%7D')
             query_list_key.append(position + "_" + city)
+
+def get_gender(parce_param):
+    if parce_param == 1:
+        gender = "Female"
+    elif parce_param == 2:
+        gender = "Male"
+    else:
+        gender = 0
+    return int(gender) if parce_param == 0 else gender
 
 
 if __name__ == '__main__':
