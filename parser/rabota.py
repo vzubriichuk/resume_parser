@@ -248,7 +248,7 @@ class Parser(Rabota):
                     phone = element.find_element(By.XPATH, phone_element)
                     self.phone = phone.text
                     continue
-                except NoSuchElementException:
+                except (NoSuchElementException, TimeoutException):
                     try:
                         time.sleep(3)
                         phone_element = '//alliance-shared-ui-copy-to-clipboard/p/a'
